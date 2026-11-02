@@ -5,13 +5,15 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 
-public class Git{ //rename Only Filhasher to Git
+public class Git { // rename Only Filhasher to Git
     public static void main(String[] args) throws IOException {
         System.err.println(init(args));
         for (int i = 0; i < args.length; i++) {
@@ -23,11 +25,11 @@ public class Git{ //rename Only Filhasher to Git
         String sha1hash = hashFile(filePath);
         // String content = new String(Files.readAllBytes(Paths.get(filePath)));
         File backup = new File("git/objects/ " + sha1hash);
-    
+
         // FileWriter object = new FileWriter(("git/objects/" + sha1hash));
         // object.write(content);
         // object.close();
-         File blobFile = new File("git/objects", sha1hash); //now it read by byte under the while loop
+        File blobFile = new File("git/objects", sha1hash); // now it read by byte under the while loop
 
         if (!blobFile.exists()) {
             FileReader reader = new FileReader(filePath);
@@ -77,10 +79,10 @@ public class Git{ //rename Only Filhasher to Git
             fullPath = fullPath.substring(rootPath.length() + 1);
         }
         fullPath = fullPath.replace("\\", "/");
-        String hash = hashFile(filePath);//changed sha1hash to hash
+        String hash = hashFile(filePath);// changed sha1hash to hash
         String output = hash + " " + fullPath;
         Path indexPath = Path.of("git/index");
-        if(Files.exists(indexPath)){
+        if (Files.exists(indexPath)) {
             ArrayList<String> lines = new ArrayList<>(Files.readAllLines(indexPath));
             boolean changed = false;
             for (int i = 0; i < lines.size(); i++) {
@@ -106,42 +108,41 @@ public class Git{ //rename Only Filhasher to Git
         }
         FileWriter updatingIndex = new FileWriter(("git/index"), true);
         // String content = new String(Files.readAllBytes(Paths.get(filePath)));
-        updatingIndex.write(hash + " " + fullPath+System.lineSeparator());
+        updatingIndex.write(hash + " " + fullPath + System.lineSeparator());
         updatingIndex.close();
-        File backup = new File("git/index/" + hash + ".txt");
-        System.out.println(backup);
-        System.out.println(updatingIndex);
     }
 
     public static String createTree(ArrayList<String> workingList, String dirPath) throws IOException {
-        String treeContent = "";
-        for (int i = 0; i < workingList.size(); i++) {
-            String[] parts = workingList.get(i).split(" ");
-            String type = parts[0];
-            String hash = parts[1];
-            String entryPath = parts[2];
-            int lastSlash = entryPath.lastIndexOf("/");
-            String entryDir = entryPath.substring(0, lastSlash);
-            String name = entryPath.substring(lastSlash + 1);
-            if (entryDir.equals(dirPath)) {
-                treeContent = treeContent + type + " " + hash + " " + name + "\n";
+        StringBuilder treeBuilder = new StringBuilder();
+        for (String entry : workingList) {
+            String[] components = entry.split(" ", 3);
+            if (components.length != 3) {
+                throw new IllegalArgumentException("Working List made incorrectly.");
+            }
+            String type = components[0];
+            String hash = components[1];
+            String path = components[2];
+            String fileParent;
+            String fileName;
+            if (path.contains("/")) {
+                fileParent = path.substring(0, path.lastIndexOf("/"));
+                fileName = path.substring(path.lastIndexOf("/") + 1);
+            } else {
+                fileParent = "";
+                fileName = path;
+            }
+            if (fileParent.equals(dirPath)) {
+                if (treeBuilder.length() > 0) {
+                    treeBuilder.append("\n");
+                }
+                treeBuilder.append(type).append(" ").append(hash).append(" ").append(fileName);
             }
         }
 
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-1");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IOException("SHA-1 is not avaliable", e);
-        }
-        String treeHash = HexFormat.of().formatHex(digest.digest(treeContent.getBytes()));
-
-        File treeFile = new File("git/objects", treeHash);
-        if (!treeFile.exists()) {
-            FileWriter writer = new FileWriter(treeFile);
-            writer.write(treeContent);
-            writer.close();
-        }
+        Path treePath = Path.of("git", "objects", "tempName");
+        Files.writeString(treePath, treeBuilder.toString());
+        String treeHash = hashFile(treePath.toString());
+        Files.move(treePath, Path.of("git", "objects", treeHash), StandardCopyOption.REPLACE_EXISTING);
         return treeHash;
     }
 
@@ -156,20 +157,20 @@ public class Git{ //rename Only Filhasher to Git
 
         for (int i = 1; i < workingList.size(); i++) {
             String current = workingList.get(i);
-            String currentPath = current.split(" ")[2];
+            String currentPath = current.split(" ", 3)[2];
             int j = i - 1;
-            while (j >= 0 && workingList.get(j).split(" ")[2].compareToIgnoreCase(currentPath) > 0) {
+            while (j >= 0 && workingList.get(j).split(" ", 3)[2].compareToIgnoreCase(currentPath) > 0) {
                 workingList.set(j + 1, workingList.get(j));
                 j--;
             }
             workingList.set(j + 1, current);
         }
 
-        while (workingList.size() > 1) {
+        while (true) {
             String deepestDir = "";
             int deepestCount = 0;
             for (int i = 0; i < workingList.size(); i++) {
-                String entryPath = workingList.get(i).split(" ")[2];
+                String entryPath = workingList.get(i).split(" ", 3)[2];
                 int slashCount = 0;
                 for (int k = 0; k < entryPath.length(); k++) {
                     if (entryPath.charAt(k) == '/') {
@@ -191,7 +192,7 @@ public class Git{ //rename Only Filhasher to Git
             boolean added = false;
             for (int i = 0; i < workingList.size(); i++) {
                 String entry = workingList.get(i);
-                String entryPath = entry.split(" ")[2];
+                String entryPath = entry.split(" ", 3)[2];
                 String entryDir = "";
                 if (entryPath.contains("/")) {
                     entryDir = entryPath.substring(0, entryPath.lastIndexOf("/"));
@@ -207,53 +208,52 @@ public class Git{ //rename Only Filhasher to Git
             }
             workingList = newList;
         }
-        return workingList.get(0).split(" ")[1];
+        if (workingList.isEmpty()) {
+            throw new IOException("Nothing left in working list.");
+        }
+        return createTree(workingList, "");
     }
 
-    public static String init(String[] args) { //change output to a string that you return
+    public static String init(String[] args) { // change output to a string that you return
         try {
             // TODO (FH-1): create the JavaFileSystem directory
-            boolean folderMade =false;
+            boolean folderMade = false;
             File root = new File("git/");
-            if(!root.exists()){ //adding check statement 
+            if (!root.exists()) { // adding check statement
                 root.mkdirs();
-                folderMade=true;
+                folderMade = true;
             }
 
             // make objects/ inside git/
             File backup = new File("git/objects/");
-            if(!backup.exists()){
-                 backup.mkdirs();
-                 folderMade=true;
+            if (!backup.exists()) {
+                backup.mkdirs();
+                folderMade = true;
             }
             File indexFile = new File("git/index");
             if (!indexFile.exists()) {
                 indexFile.createNewFile();
-                folderMade=true;
+                folderMade = true;
             }
             File HeadFile = new File("git/HEAD");
             if (!HeadFile.exists()) {
                 HeadFile.createNewFile();
-                folderMade=true;
+                folderMade = true;
             }
 
             if (folderMade) {
                 return "Git Repository Created";
             } else {
-                return "Git Repository Already Exist"; 
+                return "Git Repository Already Exist";
             }
-           
 
             // Create a file named index inside git/ if it does not already exist, with no
             // extension
-        
 
             // Create a file named HEAD inside git/ if it does not already exist, with no
             // extension
-          
 
             // print message
-   
 
         } catch (IOException e) {
             return ("File error: " + e.getMessage());
