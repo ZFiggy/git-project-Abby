@@ -12,6 +12,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class Git { // rename Only Filhasher to Git
     public static void main(String[] args) throws IOException {
@@ -212,6 +214,30 @@ public class Git { // rename Only Filhasher to Git
             throw new IOException("Nothing left in working list.");
         }
         return createTree(workingList, "");
+    }
+
+    public static String commit(String author, String message) throws IOException {
+        if (author == null || message == null || author.isEmpty() || message.isEmpty()) {
+            throw new IllegalArgumentException("Author and message are needed");
+        }
+        String treeHash = createTreeFromIndex();
+        Path headPath = Path.of("git", "HEAD");
+        String parent = Files.readString(headPath);
+        String commitDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        StringBuilder commit = new StringBuilder();
+        commit.append("tree: ").append(treeHash).append("\n");
+        if (!parent.isEmpty()) {
+            commit.append("parent: ").append(parent).append("\n");
+        }
+        commit.append("author: ").append(author).append("\n");
+        commit.append("date: ").append(commitDate).append("\n");
+        commit.append("message: ").append(message);
+        Path tempPath = Path.of("git", "objects", "tempCommit");
+        Files.writeString(tempPath, commit.toString());
+        String commitHash = hashFile(tempPath.toString());
+        Files.move(tempPath, Path.of("git", "objects", commitHash), StandardCopyOption.REPLACE_EXISTING);
+        Files.writeString(headPath, commitHash);
+        return commitHash;
     }
 
     public static String init(String[] args) { // change output to a string that you return
