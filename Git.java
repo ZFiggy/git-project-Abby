@@ -100,8 +100,9 @@ public class Git { // rename Only Filhasher to Git
             }
             if (changed) {
                 FileWriter rewriteIndex = new FileWriter("git/index");
-                for (int i = 0; i < lines.size(); i++) {
-                    rewriteIndex.write(lines.get(i) + System.lineSeparator());
+                rewriteIndex.write(lines.get(0));
+                for (int i = 1; i < lines.size(); i++) {
+                    rewriteIndex.write("\n" + lines.get(i));
                 }
                 rewriteIndex.close();
                 return;
@@ -110,7 +111,10 @@ public class Git { // rename Only Filhasher to Git
         }
         FileWriter updatingIndex = new FileWriter(("git/index"), true);
         // String content = new String(Files.readAllBytes(Paths.get(filePath)));
-        updatingIndex.write(hash + " " + fullPath + System.lineSeparator());
+        if (!(Files.size(indexPath) == 0)) {
+            updatingIndex.write("\n");
+        }
+        updatingIndex.write(hash + " " + fullPath);
         updatingIndex.close();
     }
 
